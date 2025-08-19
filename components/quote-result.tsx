@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Building2, Home, Receipt } from "lucide-react"
+import { Building2, Home, Wallet, Receipt } from "lucide-react"
 
 /** Tipos compartidos con el form */
 export type QuoteMatch = {
@@ -21,24 +21,36 @@ export type QuoteResultado = {
 
 export type QuoteData = {
   match: QuoteMatch
-  /** Compat: un solo resultado */
+  /** compat: hay flows que traen resultado único */
   resultado?: QuoteResultado
-  /** Nuevo: múltiples resultados */
+  /** nuevo: lista de resultados */
   resultados?: QuoteResultado[]
 }
 
 const toCLP = (n: number) =>
   Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP" }).format(Number(n || 0))
 
+/** Busca base de AGENCIA; si no hay, toma el primero disponible */
+function getBaseResult(q: QuoteData | null): QuoteResultado | null {
+  if (!q) return null
+  const many = q.resultados && q.resultados.length ? q.resultados : (q.resultado ? [q.resultado] : [])
+  if (!many || many.length === 0) return null
+  const agency = many.find(r => String(r?.tipo_entrega ?? "").toUpperCase() === "AGENCIA")
+  return agency ?? many[0]
+}
+
 export function QuoteResult({
   quote,
   onSelect,
 }: {
   quote: QuoteData | null
-  /** opcional: callback si quieres manejar “Elegir esta opción” */
+  /** opcional: callback si quieres capturar la opción elegida */
   onSelect?: (opt: QuoteResultado) => void
 }) {
-  if (!quote) {
+  const base = getBaseResult(quote)
+  const match = quote?.match
+
+  if (!quote || !base || !match) {
     return (
       <Card className="w-full shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
         <CardHeader className="pb-4">
@@ -57,94 +69,36 @@ export function QuoteResult({
     )
   }
 
-  // Acepta tanto 1 como N resultados
-  const all = quote?.resultados?.length
-  ? quote.resultados
-  : (quote?.resultado ? [quote.resultado] : []);
+  // Precio base (Agencia)
+  const basePrice = Number(base.tarifa_pullman_nueva) || 0
 
-  // Agrupar por tipo_entrega
-  const grupos: Record<"AGENCIA" | "DOMICILIO" | "OTROS", QuoteResultado[]> = {
-    AGENCIA: [],
-    DOMICILIO: [],
-    OTROS: [],
+  // Derivados según tu lógica:
+  const domicilioPrice = Math.round(basePrice * 1.20)   // +20%
+  const pagoDestinoPrice = Math.round(basePrice * 1.15) // +15%
+
+  // Armamos objetos "sintéticos" para las otras opciones
+  const domicilio: QuoteResultado = {
+    ...base,
+    tipo_entrega: "DOMICILIO",
+    nombre_tarifa: base.nombre_tarifa || "Domicilio (+20%)",
+    tarifa_pullman_nueva: domicilioPrice,
+  }
+  const pagoDestino: QuoteResultado = {
+    ...base,
+    tipo_entrega: "PAGO EN DESTINO",
+    nombre_tarifa: base.nombre_tarifa || "Pago en destino (+15%)",
+    tarifa_pullman_nueva: pagoDestinoPrice,
   }
 
-  for (const r of all) {
-    const tipo = String(r.tipo_entrega || "").toUpperCase()
-    if (tipo === "AGENCIA") grupos.AGENCIA.push(r)
-    else if (tipo === "DOMICILIO") grupos.DOMICILIO.push(r)
-    else grupos.OTROS.push(r)
-  }
-
-  const Section = ({
-    title,
-    icon,
-    items,
-  }: {
+  const cards: Array<{
     title: string
     icon: React.ReactNode
-    items: QuoteResultado[]
-  }) => {
-    if (!items || items.length === 0) return null
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h3 className="text-base font-semibold text-gray-800">{title}</h3>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          {items.map((it, idx) => (
-            <Card key={idx} className="border border-gray-200 shadow-sm">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-baseline justify-between">
-                  <div className="text-sm text-gray-500">Tarifa</div>
-                  <div className="text-lg font-bold">{toCLP(it.tarifa_pullman_nueva as number)}</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div className="text-gray-500">Servicio</div>
-                    <div className="font-medium">{it.tipo_servicio}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-500">Entrega</div>
-                    <div className="font-medium">{it.tipo_entrega}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-gray-500">Nombre tarifa</div>
-                    <div className="font-medium">{it.nombre_tarifa}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-gray-500">Fecha compromiso</div>
-                    <div className="font-medium">
-                      {it.fecha_compromiso ? new Date(it.fecha_compromiso).toLocaleString("es-CL") : "—"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs text-gray-500">
-                  Ruta: <span className="font-medium">{quote.match.origen} → {quote.match.destino}</span> · Peso:{" "}
-                  <span className="font-medium">{quote.match.pesoSolicitado} kg</span>
-                </div>
-
-                {onSelect && (
-                  <div className="pt-1">
-                    <Button
-                      className="w-full bg-[#003fa2] hover:bg-[#00328a] text-white"
-                      onClick={() => onSelect(it)}
-                    >
-                      Elegir esta opción
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
+    data: QuoteResultado
+  }> = [
+    { title: "Entrega en Agencia", icon: <Building2 className="h-4 w-4 text-[#003fa2]" />, data: base },
+    { title: "Entrega a Domicilio (+20%)", icon: <Home className="h-4 w-4 text-[#003fa2]" />, data: domicilio },
+    { title: "Pago en destino (+15%)", icon: <Wallet className="h-4 w-4 text-[#003fa2]" />, data: pagoDestino },
+  ]
 
   return (
     <Card className="w-full shadow-lg border-0 bg-gradient-to-br from-gray-50 to-white">
@@ -156,29 +110,61 @@ export function QuoteResult({
         <div className="h-1 w-16 bg-[#ff5500cc] rounded-full"></div>
       </CardHeader>
 
-      <CardContent className="space-y-8">
-        <Section
-          title="Opciones en Agencia"
-          icon={<Building2 className="h-4 w-4 text-[#003fa2]" />}
-          items={grupos.AGENCIA}
-        />
-        <Section
-          title="Opciones a Domicilio"
-          icon={<Home className="h-4 w-4 text-[#003fa2]" />}
-          items={grupos.DOMICILIO}
-        />
-        <Section
-          title="Otras opciones"
-          icon={<Receipt className="h-4 w-4 text-[#003fa2]" />}
-          items={grupos.OTROS}
-        />
+      <CardContent className="space-y-6">
+        <div className="grid lg:grid-cols-3 sm:grid-cols-2 gap-4">
+          {cards.map(({ title, icon, data }, idx) => (
+            <Card key={idx} className="border border-gray-200 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  {icon}
+                  <h3 className="text-base font-semibold text-gray-800">{title}</h3>
+                </div>
 
-        {/* Si por alguna razón no vino nada */}
-        {all.length === 0 && (
-          <div className="text-sm text-gray-600">
-            No se encontraron alternativas para esta combinación.
-          </div>
-        )}
+                <div className="flex items-baseline justify-between">
+                  <div className="text-sm text-gray-500">Tarifa</div>
+                  <div className="text-lg font-bold">{toCLP(Number(data.tarifa_pullman_nueva))}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-gray-500">Servicio</div>
+                    <div className="font-medium">{data.tipo_servicio}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500">Entrega</div>
+                    <div className="font-medium">{data.tipo_entrega}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-gray-500">Nombre tarifa</div>
+                    <div className="font-medium">{data.nombre_tarifa || "—"}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-gray-500">Fecha compromiso</div>
+                    <div className="font-medium">
+                      {data.fecha_compromiso ? new Date(data.fecha_compromiso).toLocaleString("es-CL") : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  Ruta: <span className="font-medium">{match.origen} → {match.destino}</span> · Peso:{" "}
+                  <span className="font-medium">{match.pesoSolicitado} kg</span>
+                </div>
+
+                {onSelect && (
+                  <div className="pt-1">
+                    <Button
+                      className="w-full bg-[#003fa2] hover:bg-[#00328a] text-white"
+                      onClick={() => onSelect(data)}
+                    >
+                      Elegir esta opción
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </CardContent>
     </Card>
   )
