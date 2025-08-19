@@ -1,5 +1,6 @@
 import { Facebook, Instagram, Linkedin, Youtube, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Image from "next/image"
 
 export function Footer() {
   return (
@@ -8,7 +9,16 @@ export function Footer() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Company Info */}
           <div className="space-y-4">
-            <div className="text-2xl font-bold text-white">pullman</div>
+            <a href="/" className="inline-flex items-center" aria-label="Ir al inicio">
+              <Image
+                src="/pullman_cargo_blanco.png"   // archivo en /public
+                alt="Pullman Cargo"
+                width={160}                         // fija dimensiones para evitar CLS
+                height={40}
+                className="h-8 md:h-10 w-auto object-contain"
+              />
+            </a>
+
             <p className="text-gray-300 text-sm leading-relaxed">
               En Pullman tenemos capacidad de adaptación y un enfoque constante en la innovación.
             </p>
