@@ -185,3 +185,18 @@ const { data } = await axios.post("/api/tarifas", {
   destino: "IQUIQUE",
   peso: 50,
 });
+
+
+se crearon los siguientes indices en la db:
+
+CREATE INDEX idx_origen_destino_peso 
+ON pcargo_tarifas.resultado_comparacion_tarifas (origen, destino, peso_final);
+
+CREATE INDEX idx_origen_destino_peso_entrega_fecha 
+ON pcargo_tarifas.resultado_comparacion_tarifas (origen, destino, peso_final, tipo_entrega, fecha_compromiso, id);
+
+SHOW INDEX FROM pcargo_tarifas.resultado_comparacion_tarifas;
+
+-- Eliminar índices existentes primero (si los hay)
+DROP INDEX idx_origen_destino_peso ON pcargo_tarifas.resultado_comparacion_tarifas;
+DROP INDEX idx_origen_destino_peso_entrega_fecha ON pcargo_tarifas.resultado_comparacion_tarifas;
